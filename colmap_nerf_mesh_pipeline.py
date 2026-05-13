@@ -45,15 +45,9 @@ def extract_frames(
     video_path: Path,
     image_dir: Path,
     every_n: int = 1,
-    max_frames: int | None = None,
-    remove_background: bool = False,
-    background_color: Tuple[int, int, int] = (0, 0, 0),) -> int:
+    max_frames: int | None = None) -> int:
     image_dir.mkdir(parents=True, exist_ok=True)
 
-    rembg_session = None
-    if remove_background:
-        print("[info] REMBG background removal enabled")
-        rembg_session = new_session("u2net")
 
     cap = cv2.VideoCapture(str(video_path))
     if not cap.isOpened():
@@ -67,43 +61,16 @@ def extract_frames(
 
     saved = 0
     idx = 0
-
     while True:
         ok, frame = cap.read()
         if not ok:
             break
-
         if idx % every_n == 0:
             out = image_dir / f"frame_{saved:06d}.png"
-
-            if remove_background:
-                rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                pil_img = Image.fromarray(rgb)
-                cutout = remove(pil_img, session=rembg_session).convert("RGBA")
-                arr = np.array(cutout)
-                alpha = arr[..., 3:4].astype(np.float32) / 255.0
-                fg = arr[..., :3].astype(np.float32)
-
-                bg = np.zeros_like(fg, dtype=np.float32)
-                bg[..., 0] = background_color[0]
-                bg[..., 1] = background_color[1]
-                bg[..., 2] = background_color[2]
-
-                cv2.imwrite(str(out), frame)
-                mask_dir = image_dir.parent / "masks"
-                mask_dir.mkdir(exist_ok=True)
-                alpha = np.array(cutout)[..., 3]
-                mask = (alpha > 0).astype(np.uint8) * 255
-                mask_path = mask_dir / f"frame_{saved:06d}.png"
-                cv2.imwrite(str(mask_path), mask)
-            else:
-                cv2.imwrite(str(out), frame)
-
+            cv2.imwrite(str(out), frame)
             saved += 1
-
             if max_frames is not None and saved >= max_frames:
                 break
-
         idx += 1
 
     cap.release()
@@ -363,8 +330,7 @@ def main() -> None:
         args.video.resolve(),
         images,
         every_n=args.every_n,
-        max_frames=args.max_frames,
-        remove_background=args.remove_background)
+        max_frames=args.max_frames)
     if extracted < 2:
         raise RuntimeError("Need at least 2 frames for reconstruction.")
 
